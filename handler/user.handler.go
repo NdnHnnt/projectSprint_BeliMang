@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func AdminLogin(c *fiber.Ctx) error {
+func UserLogin(c *fiber.Ctx) error {
 	conn := db.CreateConn()
 	var loginResult models.UserModel
 
@@ -28,9 +28,7 @@ func AdminLogin(c *fiber.Ctx) error {
 
 	// Check if Username exists
 	var count int
-	// err_nip := conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE nip = $1 LIMIT 1", loginResult.NIP).Scan(&count)
-	err := conn.QueryRow("SELECT COUNT(*) FROM \"admin\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&count)
-	// fmt.Println("nip exist success")
+	err := conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&count)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,
@@ -44,13 +42,12 @@ func AdminLogin(c *fiber.Ctx) error {
 
 	// get user data
 	var dbpassword string
-	err = conn.QueryRow("SELECT id, username, password FROM \"admin\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&loginResult.ID, &loginResult.Username, &dbpassword)
+	err = conn.QueryRow("SELECT id, username, password FROM \"user\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&loginResult.ID, &loginResult.Username, &dbpassword)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
-	// fmt.Println(dbpassword)
 
 	// check password
 	if !helpers.CheckPassword(loginResult.Password, dbpassword) {
@@ -64,7 +61,7 @@ func AdminLogin(c *fiber.Ctx) error {
 	})
 }
 
-func AdminRegister(c *fiber.Ctx) error {
+func UserRegister(c *fiber.Ctx) error {
 	conn := db.CreateConn()
 	var registerResult models.UserModel
 
@@ -83,7 +80,7 @@ func AdminRegister(c *fiber.Ctx) error {
 
 	// Check if Email already exists
 	var count int
-	err := conn.QueryRow("SELECT COUNT(*) FROM \"admin\" WHERE email = $1 LIMIT 1", registerResult.Email).Scan(&count)
+	err := conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE email = $1 LIMIT 1", registerResult.Email).Scan(&count)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,
@@ -96,7 +93,7 @@ func AdminRegister(c *fiber.Ctx) error {
 	}
 
 	// Check if username already exists
-	err = conn.QueryRow("SELECT COUNT(*) FROM \"admin\", user WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&count)
+	err = conn.QueryRow("SELECT COUNT(*) FROM \"user\", admin WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&count)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,
@@ -130,7 +127,7 @@ func AdminRegister(c *fiber.Ctx) error {
 	}
 
 	// insert data
-	_, err = conn.Exec("INSERT INTO \"admin\" (email, username, password) VALUES ($1, $2, $3)", registerResult.Email, registerResult.Username, registerResult.Password)
+	_, err = conn.Exec("INSERT INTO \"user\" (email, username, password) VALUES ($1, $2, $3)", registerResult.Email, registerResult.Username, registerResult.Password)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
