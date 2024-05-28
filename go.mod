@@ -3,8 +3,10 @@ module github.com/NdnHnnt/projectSprint_BeliMang
 go 1.22.2
 
 require (
+	github.com/aws/aws-sdk-go v1.53.10
 	github.com/gofiber/fiber/v2 v2.52.4
 	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/google/uuid v1.5.0
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
@@ -12,8 +14,6 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
-	github.com/aws/aws-sdk-go v1.53.10 // indirect
-	github.com/google/uuid v1.5.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect

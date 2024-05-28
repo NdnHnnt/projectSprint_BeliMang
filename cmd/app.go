@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/NdnHnnt/projectSprint_BeliMang/handler"
+	handlers "github.com/NdnHnnt/projectSprint_BeliMang/handler"
 	helpers "github.com/NdnHnnt/projectSprint_BeliMang/helper"
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,7 +17,8 @@ func main() {
 	admin.Post("/login", handlers.AdminLogin)
 	// Req admin bearer token
 	admin.Post("/merchant", helpers.AuthAdminMiddleware, handlers.MerchantRegister)
-	admin.Get("/merchant",  helpers.AuthAdminMiddleware, handlers.MerchantGet)
+	admin.Get("/merchant", helpers.AuthAdminMiddleware, handlers.MerchantGet)
+	admin.Post("/merchant/:merchantId/items", helpers.AuthAdminMiddleware, handlers.MerchantRegisterItem)
 	// Doesnt require user token
 	user.Post("/register", handlers.UserRegister)
 	user.Post("/login", handlers.UserLogin)

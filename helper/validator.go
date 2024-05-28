@@ -107,6 +107,24 @@ func ValidateMerchantCategory(category string) bool {
 	return false
 }
 
+func ValidateMerchantItem(itemName string) bool {
+	validCategories := []string{
+		"Beverage",
+		"Food",
+		"Snack",
+		"Condiments",
+		"Additions",
+	}
+
+	for _, validCategory := range validCategories {
+		if itemName == validCategory {
+			return true
+		}
+	}
+
+	return false
+}
+
 func ValidateLocation(lat, lon float64) bool {
 	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
 		return false
