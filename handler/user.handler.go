@@ -36,7 +36,7 @@ func UserLogin(c *fiber.Ctx) error {
 			"message": err,
 		})
 	}
-	fmt.Println("Count:", count)
+	// fmt.Println("Count:", count)
 	if count == 0 {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"message": "Username not found",
@@ -45,7 +45,7 @@ func UserLogin(c *fiber.Ctx) error {
 
 	// get user data
 	var dbpassword string
-	err = conn.QueryRow("SELECT id, username, password FROM \"user\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&loginResult.ID, &loginResult.Username, &dbpassword)
+	err = conn.QueryRow("SELECT id, username, password, email FROM \"user\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&loginResult.ID, &loginResult.Username, &dbpassword, &loginResult.Email)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
@@ -96,13 +96,24 @@ func UserRegister(c *fiber.Ctx) error {
 	}
 
 	// Check if username already exists
-	// err = conn.QueryRow("SELECT COUNT(*) FROM \"user\", admin WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&count)
-	err = conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE username = $1 UNION ALL SELECT COUNT(*) FROM admin WHERE username = $1", registerResult.Username).Scan(&count)
+	var userCount, adminCount int
+
+	err = conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE username = $1", registerResult.Username).Scan(&userCount)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,
 		})
 	}
+
+	err = conn.QueryRow("SELECT COUNT(*) FROM admin WHERE username = $1", registerResult.Username).Scan(&adminCount)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": err,
+		})
+	}
+
+	count = userCount + adminCount
+
 	if count > 0 {
 		return c.Status(http.StatusConflict).JSON(fiber.Map{
 			"message": "Username already used",
@@ -132,6 +143,13 @@ func UserRegister(c *fiber.Ctx) error {
 
 	// insert data
 	_, err = conn.Exec("INSERT INTO \"user\" (email, username, password) VALUES ($1, $2, $3)", registerResult.Email, registerResult.Username, registerResult.Password)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	err = conn.QueryRow("SELECT id, email FROM \"user\" WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&registerResult.ID, &registerResult.Email)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),

@@ -42,7 +42,7 @@ func AdminLogin(c *fiber.Ctx) error {
 
 	// Get user data
 	var dbpassword string
-	err = conn.QueryRow("SELECT id, username, password FROM \"admin\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&loginResult.ID, &loginResult.Username, &dbpassword)
+	err = conn.QueryRow("SELECT id, username, password, email FROM \"admin\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&loginResult.ID, &loginResult.Username, &dbpassword, &loginResult.Email)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
@@ -107,17 +107,23 @@ func AdminRegister(c *fiber.Ctx) error {
 	}
 
 	// Check if username already exists
-	err = conn.QueryRow("SELECT COUNT(*) FROM \"admin\", user WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&count)
+	var userCount, adminCount int
+
+	err = conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE username = $1", registerResult.Username).Scan(&userCount)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,
 		})
 	}
-	if count > 0 {
-		return c.Status(http.StatusConflict).JSON(fiber.Map{
-			"message": "Username already used",
+
+	err = conn.QueryRow("SELECT COUNT(*) FROM admin WHERE username = $1", registerResult.Username).Scan(&adminCount)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": err,
 		})
 	}
+
+	count = userCount + adminCount
 
 	// Insert data
 	_, err = conn.Exec("INSERT INTO \"admin\" (email, username, password) VALUES ($1, $2, $3)", registerResult.Email, registerResult.Username, registerResult.Password)
@@ -126,6 +132,15 @@ func AdminRegister(c *fiber.Ctx) error {
 			"message": err.Error(),
 		})
 	}
+
+	// Get ID and Email
+	err = conn.QueryRow("SELECT id FROM \"admin\" WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&registerResult.ID)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
 
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
 		"token": helpers.SignUserJWT(registerResult),

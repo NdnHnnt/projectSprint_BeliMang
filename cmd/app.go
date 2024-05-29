@@ -1,11 +1,11 @@
 package main
 
 import (
+	"log"
+
 	handlers "github.com/NdnHnnt/projectSprint_BeliMang/handler"
 	helpers "github.com/NdnHnnt/projectSprint_BeliMang/helper"
 	"github.com/gofiber/fiber/v2"
-
-	"log"
 )
 
 func main() {
