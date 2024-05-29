@@ -312,16 +312,3 @@ func MerchantGetItem(c *fiber.Ctx) error {
 		},
 	})
 }
-
-func MerchantGetNearby(c *fiber.Ctx) error {
-	lat := c.Params("lat")
-	long := c.Params("long")
-
-	// You can now use lat and long in your function
-
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"message": "Not Implemented",
-		lat:       lat,
-		long:      long,
-	})
-}
