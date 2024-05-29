@@ -31,6 +31,7 @@ func main() {
 	admin.Post("/merchants", helpers.AuthAdminMiddleware, handlers.MerchantRegister)
 	admin.Get("/merchants", helpers.AuthAdminMiddleware, handlers.MerchantGet)
 	admin.Post("/merchants/:merchantId/items", helpers.AuthAdminMiddleware, handlers.MerchantRegisterItem)
+	admin.Get("/merchants/:merchantId/items", helpers.AuthAdminMiddleware, handlers.MerchantGetItem)
 	// Doesnt require user token
 	user.Post("/register", handlers.UserRegister)
 	user.Post("/login", handlers.UserLogin)

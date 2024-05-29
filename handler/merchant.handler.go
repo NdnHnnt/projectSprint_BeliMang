@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	// "fmt"
 	"log"
 	"net/http"
 	"time"
@@ -51,7 +52,7 @@ func MerchantRegister(c *fiber.Ctx) error {
 	}
 
 	// Check location format
-	if registerMerchantResult.Lat == 0 || registerMerchantResult.Lon == 0 || !helpers.ValidateLocation(registerMerchantResult.Lat, registerMerchantResult.Lon) {
+	if !helpers.ValidateLocation(registerMerchantResult.Lat, registerMerchantResult.Lon) {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"message": "Location is not valid",
 		})
@@ -88,15 +89,15 @@ func MerchantGet(c *fiber.Ctx) error {
 	offset := c.Query("offset", "0")
 	sortOrder := c.Query("createdAt", "desc")
 	// Build the base query
-	query := `SELECT * FROM "merchant"`
+	query := `SELECT * FROM merchant WHERE 1 = 1`
 	// Add the WHERE clauses for the optional parameters
 	if merchantId != "" {
-		query += ` WHERE "id" = '` + merchantId + `'`
+		query += ` AND "id" = '` + merchantId + `'`
 	}
 	if name != "" {
 		query += ` AND LOWER("name") LIKE LOWER('%` + name + `%')`
 	}
-	if !helpers.ValidateMerchantCategory(merchantCategory) || merchantCategory != "" {
+	if merchantCategory != "" && helpers.ValidateMerchantCategory(merchantCategory) {
 		query += ` AND "merchantCategory" = '` + merchantCategory + `'`
 	}
 	// Add the ORDER BY and LIMIT clauses
@@ -104,6 +105,7 @@ func MerchantGet(c *fiber.Ctx) error {
 		query += ` ORDER BY "createdAt" ` + sortOrder
 	}
 	query += ` LIMIT ` + limit + ` OFFSET ` + offset
+	// fmt.Println(query)
 	rows, err := conn.Query(query)
 	if err != nil {
 		log.Println("Failed to execute the query:", err)
@@ -116,8 +118,8 @@ func MerchantGet(c *fiber.Ctx) error {
 	for rows.Next() {
 		var id, name, merchantCategory, imageUrl string
 		var lat, long float64
-		var createdAt time.Time
-		err = rows.Scan(&id, &name, &merchantCategory, &imageUrl, &lat, &long, &createdAt)
+		var createdAt, updatedAt time.Time
+		err = rows.Scan(&id, &name, &merchantCategory, &imageUrl, &lat, &long, &createdAt, &updatedAt)
 		if err != nil {
 			log.Println("Failed to scan row:", err)
 			return c.Status(http.StatusInternalServerError).SendString(err.Error())
@@ -221,8 +223,93 @@ func MerchantRegisterItem(c *fiber.Ctx) error {
 }
 
 func MerchantGetItem(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"message": "Not Implemented",
+	conn := db.CreateConn() // Use the global db connection
+	// Get the query parameters
+	merchantId := c.Params("merchantId")
+	itemId := c.Query("itemId", "")
+	name := c.Query("name", "")
+	productCategory := c.Query("productCategory", "")
+	limit := c.Query("limit", "5")
+	offset := c.Query("offset", "0")
+	sortOrder := c.Query("createdAt", "desc")
+
+	// Check if merchantId is empty
+	if merchantId == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"message": "Merchant ID is required",
+		})
+	}
+		
+	// Check if merchant exists
+	var count int
+	err := conn.QueryRow("SELECT COUNT(*) FROM \"merchant\" WHERE id = $1", merchantId).Scan(&count)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+	if count == 0 {
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{
+			"message": "Merchant not found",
+		})
+	}
+
+	// Build the base query
+	query := `SELECT * FROM item WHERE "merchantId" = '` + merchantId + `'`
+	// Add the WHERE clauses for the optional parameters
+	if itemId != "" {
+		query += ` AND "id" = '` + itemId + `'`
+	}
+	if name != "" {
+		query += ` AND LOWER("name") LIKE LOWER('%` + name + `%')`
+	}
+	if productCategory != "" && helpers.ValidateMerchantItem(productCategory) {
+		query += ` AND "productCategory" = '` + productCategory + `'`
+	}
+	
+	// Add the ORDER BY and LIMIT clauses
+	if sortOrder == "asc" || sortOrder == "desc" {
+		query += ` ORDER BY "createdAt" ` + sortOrder
+	}
+	query += ` LIMIT ` + limit + ` OFFSET ` + offset
+	// fmt.Println(query)
+	rows, err := conn.Query(query)
+	if err != nil {
+		log.Println("Failed to execute the query:", err)
+		return c.Status(http.StatusInternalServerError).SendString(err.Error())
+	}
+	defer rows.Close()
+
+	// Prepare the data
+	data := make([]map[string]interface{}, 0)
+	for rows.Next() {
+		var id, merchantId, name, productCategory, imageUrl string
+		var price int64
+		var createdAt, updatedAt time.Time
+		err = rows.Scan(&id, &name, &productCategory, &imageUrl,  &price, &merchantId, &createdAt, &updatedAt)
+		if err != nil {
+			log.Println("Failed to scan row:", err)
+			return c.Status(http.StatusInternalServerError).SendString(err.Error())
+		}
+
+		data = append(data, fiber.Map{
+			"itemId":          id,
+			"name":            name,
+			"productCategory": productCategory,
+			"price":           price,
+			"imageUrl":        imageUrl,
+			"createdAt":       createdAt.Format(time.RFC3339Nano),
+		})
+	}
+
+	// Return the results as JSON
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"data": data,
+		"meta": fiber.Map{
+			"limit":  limit,
+			"offset": offset,
+			"total":  len(data),
+		},
 	})
 }
 
