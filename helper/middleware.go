@@ -38,6 +38,7 @@ func SignUserJWT(user models.UserModel) string {
 		jwt.SigningMethodHS256,
 		claims,
 	)
+	fmt.Println("Email:", user.Email)
 	jwtSecret := os.Getenv("JWT_SECRET")
 	signedToken, err := token.SignedString([]byte(jwtSecret))
 	if err != nil {
