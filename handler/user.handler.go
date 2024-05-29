@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/NdnHnnt/projectSprint_BeliMang/db"
@@ -30,10 +31,12 @@ func UserLogin(c *fiber.Ctx) error {
 	var count int
 	err := conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE username = $1 LIMIT 1", loginResult.Username).Scan(&count)
 	if err != nil {
+		fmt.Println("Error:", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,
 		})
 	}
+	fmt.Println("Count:", count)
 	if count == 0 {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"message": "Username not found",
@@ -93,7 +96,8 @@ func UserRegister(c *fiber.Ctx) error {
 	}
 
 	// Check if username already exists
-	err = conn.QueryRow("SELECT COUNT(*) FROM \"user\", admin WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&count)
+	// err = conn.QueryRow("SELECT COUNT(*) FROM \"user\", admin WHERE username = $1 LIMIT 1", registerResult.Username).Scan(&count)
+	err = conn.QueryRow("SELECT COUNT(*) FROM \"user\" WHERE username = $1 UNION ALL SELECT COUNT(*) FROM admin WHERE username = $1", registerResult.Username).Scan(&count)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err,

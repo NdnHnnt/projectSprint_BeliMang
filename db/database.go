@@ -19,7 +19,7 @@ func init() {
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(`Error loading .env file: `, err.Error())
 	}
 	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?%s",
 		os.Getenv("DB_USERNAME"),
