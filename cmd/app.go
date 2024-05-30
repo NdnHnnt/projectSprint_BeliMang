@@ -37,6 +37,7 @@ func main() {
 	user.Post("/login", handlers.UserLogin)
 	// Req user bearer token
 	user.Get("/merchants/nearby/:lat,:long", helpers.AuthUserMiddleware, handlers.MerchantGetNearby)
+	user.Post("/estimate", helpers.AuthUserMiddleware, handlers.MerchantEstimate)
 	// user.Post("/orders", helpers.AuthUserMiddleware, handlers.MerchantPostOrder)
 	// user.Get("/orders", helpers.AuthUserMiddleware, handlers.MerchantGetOrder)
 

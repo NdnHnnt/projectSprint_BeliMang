@@ -1,9 +1,10 @@
 package handlers
 
 import (
-	// "fmt"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/NdnHnnt/projectSprint_BeliMang/db"
@@ -12,8 +13,17 @@ import (
 )
 
 func MerchantGetNearby(c *fiber.Ctx) error {
-	lat := c.Params("lat")
-	long := c.Params("long")
+	// lat := c.Params("lat")
+	// long := c.Params("long")
+
+	lat, err := strconv.ParseFloat(c.Params("lat"), 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid latitude")
+	}
+	long, err := strconv.ParseFloat(c.Params("long"), 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid longitude")
+	}
 
 	conn := db.CreateConn()
 	// Get the query parameters
@@ -24,7 +34,13 @@ func MerchantGetNearby(c *fiber.Ctx) error {
 	offset := c.Query("offset", "0")
 	sortOrder := c.Query("createdAt", "desc")
 	// Build the base query
-	query := `SELECT * FROM merchant WHERE 1 = 1`
+	// query := `SELECT * FROM merchant WHERE 1 = 1`
+	query := fmt.Sprintf(`
+    SELECT *, 
+        (6371 * acos(cos(radians(%f)) * cos(radians(lat)) * cos(radians(long) - radians(%f)) + sin(radians(%f)) * sin(radians(lat)))) AS distance 
+    FROM merchant 
+    WHERE 1 = 1`, lat, long, lat)
+
 	// Add the WHERE clauses for the optional parameters
 	if merchantId != "" {
 		query += ` AND "id" = '` + merchantId + `'`
@@ -35,9 +51,10 @@ func MerchantGetNearby(c *fiber.Ctx) error {
 	if merchantCategory != "" && helpers.ValidateMerchantCategory(merchantCategory) {
 		query += ` AND "merchantCategory" = '` + merchantCategory + `'`
 	}
+	query += `ORDER by "distance" asc `
 	// Add the ORDER BY and LIMIT clauses
 	if sortOrder == "asc" || sortOrder == "desc" {
-		query += ` ORDER BY "createdAt" ` + sortOrder
+		query += ` ,"createdAt" ` + sortOrder
 	}
 	query += ` LIMIT ` + limit + ` OFFSET ` + offset
 	// fmt.Println(query)
@@ -52,9 +69,9 @@ func MerchantGetNearby(c *fiber.Ctx) error {
 	data := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var id, name, merchantCategory, imageUrl string
-		var lat, long float64
+		var lat, long, distance float64
 		var createdAt, updatedAt time.Time
-		err = rows.Scan(&id, &name, &merchantCategory, &imageUrl, &lat, &long, &createdAt, &updatedAt)
+		err = rows.Scan(&id, &name, &merchantCategory, &imageUrl, &lat, &long, &createdAt, &updatedAt, &distance)
 		if err != nil {
 			log.Println("Failed to scan row:", err)
 			return c.Status(http.StatusInternalServerError).SendString(err.Error())
@@ -78,6 +95,20 @@ func MerchantGetNearby(c *fiber.Ctx) error {
 		"lat":     lat,
 		"long":    long,
 		"data":    data,
+	})
+}
+
+func MerchantEstimate(c *fiber.Ctx) error {
+
+	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+		"message": "Not Implemented",
+	})
+}
+
+func MerchantPostOrder(c *fiber.Ctx) error {
+	
+	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+		"message": "Not Implemented",
 	})
 }
 
