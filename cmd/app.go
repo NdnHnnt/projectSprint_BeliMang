@@ -23,7 +23,7 @@ func main() {
 	// })
 
 	admin := app.Group("/admin")
-	user := app.Group("/user")
+	user := app.Group("/users")
 	// Doesnt require admin token
 	admin.Post("/register", handlers.AdminRegister)
 	admin.Post("/login", handlers.AdminLogin)
@@ -37,6 +37,8 @@ func main() {
 	user.Post("/login", handlers.UserLogin)
 	// Req user bearer token
 	user.Get("/merchants/nearby/:lat,:long", helpers.AuthUserMiddleware, handlers.MerchantGetNearby)
+	// user.Post("/orders", helpers.AuthUserMiddleware, handlers.MerchantPostOrder)
+	// user.Get("/orders", helpers.AuthUserMiddleware, handlers.MerchantGetOrder)
 
 	log.Fatal(app.Listen(":8080"))
 }

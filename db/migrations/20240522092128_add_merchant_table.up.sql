@@ -10,7 +10,7 @@ CREATE TYPE "MerchantCategory" AS ENUM (
 
 CREATE TABLE IF NOT EXISTS "merchant" (
     "id" uuid UNIQUE NOT NULL DEFAULT (gen_random_uuid()) PRIMARY KEY,
-    "name" varchar(30) UNIQUE NOT NULL,
+    "name" varchar(30) NOT NULL,
     "merchantCategory" "MerchantCategory" NOT NULL,
     "imageUrl" varchar(255) NOT NULL,
     "lat" REAL NOT NULL,
@@ -29,7 +29,7 @@ CREATE TYPE "ProductCategory" AS ENUM (
 
 CREATE TABLE IF NOT EXISTS "item" (
     "id" uuid UNIQUE NOT NULL DEFAULT (gen_random_uuid()) PRIMARY KEY,
-    "name" varchar(30) UNIQUE NOT NULL,
+    "name" varchar(30) NOT NULL,
     "productCategory" "ProductCategory" NOT NULL,
     "imageUrl" varchar(255) NOT NULL,
     "price" int NOT NULL,
