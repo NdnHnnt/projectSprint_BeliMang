@@ -145,7 +145,7 @@ func ValidateAdmin(email string, id string) (bool, error) {
 func ValidateUser(email string, id string) (bool, error) {
 	conn := db.CreateConn()
 	var exists bool
-	err := conn.QueryRow("SELECT EXISTS(SELECT 1 FROM user WHERE email=$1 AND id=$2)", email, id).Scan(&exists)
+	err := conn.QueryRow("SELECT EXISTS(SELECT 1 FROM public.user WHERE email=$1 AND id=$2)", email, id).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
