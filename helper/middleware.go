@@ -96,6 +96,7 @@ func AuthAdminMiddleware(c *fiber.Ctx) error {
 	// Parse and validate the JWT token, and extract the Nip
 	id, email, err := ParseToken(tokenStr)
 	if err != nil {
+		fmt.Println("Error parsing token: ", err)
 		return c.Status(http.StatusUnauthorized).SendString("Invalid JWT token")
 	}
 
