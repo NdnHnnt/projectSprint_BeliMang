@@ -3,10 +3,12 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"database/sql"
 
 	"github.com/NdnHnnt/projectSprint_BeliMang/db"
 	helpers "github.com/NdnHnnt/projectSprint_BeliMang/helper"
@@ -443,11 +445,150 @@ func MerchantGetNearby(c *fiber.Ctx) error {
 }
 
 func MerchantEstimate(c *fiber.Ctx) error {
+    var MerchantEstimatePrice models.MerchantEstimatePrice
+    if err := c.BodyParser(&MerchantEstimatePrice); err != nil {
+        return c.Status(400).JSON(fiber.Map{
+            "message": err.Error()})
+    }
+    if len(MerchantEstimatePrice.Orders) <= 0 {
+        return c.Status(400).JSON(fiber.Map{"message": "order cannot be empty"})
+    }
+    var startingMerchant models.MerchantModel
+    listMerchants := make([]models.MerchantModel, 0)
+    totalPrice := 0
+    conn := db.CreateConn()
+    count := 0
+    for _, order := range MerchantEstimatePrice.Orders {
 
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"message": "Not Implemented",
-	})
+        if len(order.Items) == 0 {
+            return c.Status(400).JSON(fiber.Map{"message": "item cannot be empty"})
+        }
+        // check merchant
+        // var merchant models.MerchantModel
+				var merchants []models.MerchantModel
+				err := conn.Select(&merchants, "SELECT * FROM merchant WHERE id = $1", order.MerchantId)
+				if err != nil {
+						if err ==sql.ErrNoRows{
+							c.JSON(404, gin.H{"message":"merchant not found"})
+					return
+				}
+				fmt.Println(err.Error())
+				c.JSON(500,"server error")
+				return
+			}
+				merchant := merchants[0]
+        if order.IsStartingPoint {
+            if count != 0 {
+                return c.Status(400).JSON(fiber.Map{"message": "invalid starting point"})
+            }
+            count = 1
+            startingMerchant = merchant
+        } else {
+            listMerchants = append(listMerchants, merchant)
+        }
+        // count item price
+        for _, item := range order.Items {
+            // check item
+            var product models.MerchantItems
+            err := conn.QueryRowx("SELECT id, price FROM item WHERE id = $1 AND \"merchantId\" = $2", item.ItemId, merchant.ID).StructScan(&product)
+            fmt.Println(item.ItemId, merchant.ID)
+            if err != nil {
+                if err == sql.ErrNoRows {
+                    return c.Status(404).JSON(fiber.Map{"message": "item not found"})
+                }
+                fmt.Println(err.Error())
+                return c.Status(500).SendString("server error")
+            }
+            totalPrice += item.Quantity * product.Price
+        }
+    }
+
+		//TSP
+    totalDistance := 0.0
+    n := len(listMerchants)
+    isVisited := make([]bool, n)
+    tour := make([]models.MerchantModel, 0)
+    currentMerchant := startingMerchant
+    // make first tour from isStartingPoint
+    tour = append(tour, currentMerchant)
+    for len(tour) <= n {
+        next := -1
+        minDist := math.Inf(1)
+
+        for i := 0; i < n; i++ {
+            if !isVisited[i] {
+                // fmt.Println(listMerchants[i])
+                dist := helpers.Haversine(currentMerchant.Lat, currentMerchant.Lon, listMerchants[i].Lat, listMerchants[i].Lon)
+                if dist <= minDist {
+                    minDist = dist
+                    next = i
+                    fmt.Println("minDist: ", minDist, i)
+                }
+            }
+        }
+        if next == -1 {
+            return c.Status(500).JSON(fiber.Map{"message": "server error"})
+        }
+        // mark as visited and continue from the nearest merchant
+        isVisited[next] = true
+        tour = append(tour, listMerchants[next])
+        totalDistance += minDist
+        currentMerchant = listMerchants[next]
+        fmt.Println("total :", totalDistance)
+    }
+    lastMerchant := tour[len(tour)-1]
+    totalDistance += helper.CountHaversine(lastMerchant.Lat, lastMerchant.Lon, estimateForm.UserLocation.Lat, estimateForm.UserLocation.Long)
+    fmt.Println("total :", totalDistance)
+    // count delivery in minutes
+    deliveryTime := math.Round(totalDistance / 40 * 60)
+    // insert into database
+    query := "INSERT INTO estimate (\"userId\",\"userLat\", \"userLon\", \"totalPrice\", \"estimateDeliveryTime\") VALUES ($1,$2,$3,$4,$5) RETURNING id"
+    var estimateId string
+    err := conn.QueryRow(query, userId, estimateForm.UserLocation.Lat, estimateForm.UserLocation.Long, totalPrice, deliveryTime).Scan(&estimateId)
+    if err != nil {
+        fmt.Println(err.Error())
+        return c.Status(500).JSON(fiber.Map{"message": "server error"})
+    }
+    for _, order := range estimateForm.Orders {
+        query = "INSERT INTO \"estimateOrder\" (\"estimateId\", \"isStarting\", \"merchantId\") VALUES ($1,$2,$3) RETURNING id"
+        var estimateOrderId string
+        err := conn.QueryRow(query, estimateId, order.IsStartingPoint, order.MerchantId).Scan(&estimateOrderId)
+        if err != nil {
+            fmt.Println(err.Error())
+            return c.Status(500).JSON(fiber.Map{"message": "server error"})
+        }
+        for _, item := range order.Items {
+            query = "INSERT INTO \"estimateOrderItem\" (\"estimateOrderId\", \"itemId\", quantity) VALUES ($1,$2,$3) RETURNING id"
+            var estimateOrderItemId string
+            err := conn.QueryRow(query, estimateOrderId, item.ItemId, item.Quantity).Scan(&estimateOrderItemId)
+            if err != nil {
+                fmt.Println(err.Error())
+                return c.Status(500).JSON(fiber.Map{"message": "server error"})
+            }
+        }
+    }
+    return c.Status(200).JSON(fiber.Map{"estimatedDeliveryTimeInMinutes": deliveryTime, "totalPrice": totalPrice, "calculatedEstimateId": estimateId})
 }
+
+// func MerchantEstimate(c *fiber.Ctx) error {
+// 	var MerchantEstimatePrice models.MerchantEstimatePrice
+// 	err := c.BodyParser(&MerchantEstimatePrice)
+// 	if err != nil {
+// 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+// 			"message": "Error parsing body",
+// 		})
+// 	}
+
+// 	var MerchantEstimateOrder models.MerchantEstimateOrder
+
+
+// 	var MerchantEstimateOrderItem models.MerchantEstimateOrderItem
+
+
+	// return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+	// 	"message": "Not Implemented",
+	// })
+// }
 
 func MerchantPostOrder(c *fiber.Ctx) error {
 

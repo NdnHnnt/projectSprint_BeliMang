@@ -37,3 +37,22 @@ type MerchantItems struct {
 	CreatedAt       time.Time `json:"createdAt" db:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt" db:"updatedAt"`
 }
+
+type MerchantEstimatePrice struct {
+	UserLocation struct {
+		Lat  float64 `json:"lat"`
+		Long float64 `json:"long"`
+	} `json:"userLocation"`
+	Orders []MerchantEstimateOrder `json:"orders"`
+}
+
+type MerchantEstimateOrder struct {
+	MerchantId      string                      `json:"merchantId"`
+	IsStartingPoint bool                        `json:"isStartingPoint"`
+	Items           []MerchantEstimateOrderItem `json:"items"`
+}
+
+type MerchantEstimateOrderItem struct {
+	ItemId   string `json:"itemId"`
+	Quantity int    `json:"quantity"`
+}
