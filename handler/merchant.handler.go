@@ -542,6 +542,7 @@ func MerchantEstimate(c *fiber.Ctx) error {
     // insert into database
     query := "INSERT INTO estimate (\"userId\",\"userLat\", \"userLon\", \"totalPrice\", \"estimateDeliveryTime\") VALUES ($1,$2,$3,$4,$5) RETURNING id"
     var estimateId string
+		userId := c.Locals("userId")
     err := conn.QueryRow(query, userId, MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long, totalPrice, deliveryTime).Scan(&estimateId)
     if err != nil {
         fmt.Println(err.Error())
