@@ -468,14 +468,12 @@ func MerchantEstimate(c *fiber.Ctx) error {
 				var merchants []models.MerchantModel
 				err := conn.Select(&merchants, "SELECT * FROM merchant WHERE id = $1", order.MerchantId)
 				if err != nil {
-						if err ==sql.ErrNoRows{
-							c.JSON(404, gin.H{"message":"merchant not found"})
-					return
+					if err == sql.ErrNoRows {
+						return c.Status(404).JSON(fiber.Map{"message": "merchant not found"})
+					}
+					fmt.Println(err.Error())
+					return c.Status(500).JSON(fiber.Map{"message": "server error"})
 				}
-				fmt.Println(err.Error())
-				c.JSON(500,"server error")
-				return
-			}
 				merchant := merchants[0]
         if order.IsStartingPoint {
             if count != 0 {
@@ -537,19 +535,19 @@ func MerchantEstimate(c *fiber.Ctx) error {
         fmt.Println("total :", totalDistance)
     }
     lastMerchant := tour[len(tour)-1]
-    totalDistance += helper.CountHaversine(lastMerchant.Lat, lastMerchant.Lon, estimateForm.UserLocation.Lat, estimateForm.UserLocation.Long)
+    totalDistance += helpers.Haversine(lastMerchant.Lat, lastMerchant.Lon, MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long)
     fmt.Println("total :", totalDistance)
     // count delivery in minutes
     deliveryTime := math.Round(totalDistance / 40 * 60)
     // insert into database
     query := "INSERT INTO estimate (\"userId\",\"userLat\", \"userLon\", \"totalPrice\", \"estimateDeliveryTime\") VALUES ($1,$2,$3,$4,$5) RETURNING id"
     var estimateId string
-    err := conn.QueryRow(query, userId, estimateForm.UserLocation.Lat, estimateForm.UserLocation.Long, totalPrice, deliveryTime).Scan(&estimateId)
+    err := conn.QueryRow(query, userId, MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long, totalPrice, deliveryTime).Scan(&estimateId)
     if err != nil {
         fmt.Println(err.Error())
         return c.Status(500).JSON(fiber.Map{"message": "server error"})
     }
-    for _, order := range estimateForm.Orders {
+    for _, order := range MerchantEstimatePrice.Orders {
         query = "INSERT INTO \"estimateOrder\" (\"estimateId\", \"isStarting\", \"merchantId\") VALUES ($1,$2,$3) RETURNING id"
         var estimateOrderId string
         err := conn.QueryRow(query, estimateId, order.IsStartingPoint, order.MerchantId).Scan(&estimateOrderId)
@@ -569,26 +567,6 @@ func MerchantEstimate(c *fiber.Ctx) error {
     }
     return c.Status(200).JSON(fiber.Map{"estimatedDeliveryTimeInMinutes": deliveryTime, "totalPrice": totalPrice, "calculatedEstimateId": estimateId})
 }
-
-// func MerchantEstimate(c *fiber.Ctx) error {
-// 	var MerchantEstimatePrice models.MerchantEstimatePrice
-// 	err := c.BodyParser(&MerchantEstimatePrice)
-// 	if err != nil {
-// 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-// 			"message": "Error parsing body",
-// 		})
-// 	}
-
-// 	var MerchantEstimateOrder models.MerchantEstimateOrder
-
-
-// 	var MerchantEstimateOrderItem models.MerchantEstimateOrderItem
-
-
-	// return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-	// 	"message": "Not Implemented",
-	// })
-// }
 
 func MerchantPostOrder(c *fiber.Ctx) error {
 
