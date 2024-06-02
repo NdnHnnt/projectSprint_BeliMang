@@ -39,7 +39,7 @@ func main() {
 	user.Get("/merchants/nearby/:loc", helpers.AuthUserMiddleware, handlers.MerchantGetNearby)
 	user.Post("/estimate", helpers.AuthUserMiddleware, handlers.MerchantEstimate)
 	// user.Post("/orders", helpers.AuthUserMiddleware, handlers.MerchantPostOrder)
-	// user.Get("/orders", helpers.AuthUserMiddleware, handlers.MerchantGetOrder)
+	user.Get("/orders", helpers.AuthUserMiddleware, handlers.MerchantGetOrders)
 
 	log.Fatal(app.Listen(":8080"))
 }

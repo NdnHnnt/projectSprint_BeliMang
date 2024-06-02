@@ -452,15 +452,25 @@ func MerchantEstimate(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": err.Error()})
 		}
 		merchant := merchants[0]
+		// Increment count if order is a starting point
 		if order.IsStartingPoint {
 			count++
 			startingMerchant = merchant
+		} else if (order.IsStartingPoint && count > 1) || count > 1 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Only one starting point is allowed"})
 		} else {
 			listMerchants = append(listMerchants, merchant)
 		}
-		// Check if the starting point is more than one
-		if count > 1 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid starting point"})
+
+		// Convert the latitude and longitude of the first point to Cartesian coordinates
+		x1, y1, _ := helpers.LatLongToCartesian(MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long)
+
+		// Convert the latitude and longitude of the second point to Cartesian coordinates
+		x2, y2, _ := helpers.LatLongToCartesian(merchant.Lat, merchant.Lon)
+
+		// Check if the area of the rectangle formed by the two points is less than or equal to 3 km²
+		if !helpers.CalculateRectangleArea(x1, y1, x2, y2) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Merchant area exceeds the limit."})
 		}
 
 		// count item price
@@ -550,32 +560,14 @@ func MerchantPostOrder(c *fiber.Ctx) error {
 	})
 }
 
-func MerchantGetOrder(c *fiber.Ctx) error {
-	conn := db.CreateConn() // Use the global db connection
-	// Get the query parameters
+func MerchantGetOrders(c *fiber.Ctx) error {
+	conn := db.CreateConn()
 	merchantId := c.Query("merchantId", "")
 	name := c.Query("name", "")
 	merchantCategory := c.Query("merchantCategory", "")
-	limit := c.Query("limit", "5")
-	offset := c.Query("offset", "0")
-	sortOrder := c.Query("createdAt", "desc")
-	// Build the base query
-	query := `SELECT * FROM merchant WHERE 1 = 1`
-	// Add the WHERE clauses for the optional parameters
-	if merchantId != "" {
-		query += ` AND "id" = '` + merchantId + `'`
-	}
-	if name != "" {
-		query += ` AND LOWER("name") LIKE LOWER('%` + name + `%')`
-	}
-	if merchantCategory != "" && helpers.ValidateMerchantCategory(merchantCategory) {
-		query += ` AND "merchantCategory" = '` + merchantCategory + `'`
-	}
-	// Add the ORDER BY and LIMIT clauses
-	if sortOrder == "asc" || sortOrder == "desc" {
-		query += ` ORDER BY "createdAt" ` + sortOrder
-	}
-	query += ` LIMIT ` + limit + ` OFFSET ` + offset
+
+	query := fmt.Sprintf(`SELECT id, "createdAt" FROM estimate WHERE "userId" = '%s'`, c.Locals("userId"))
+	fmt.Println(query)
 	rows, err := conn.Query(query)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
@@ -585,34 +577,201 @@ func MerchantGetOrder(c *fiber.Ctx) error {
 	// Prepare the data
 	data := make([]map[string]interface{}, 0)
 	for rows.Next() {
-		var id, name, merchantCategory, imageUrl string
-		var lat, long float64
-		var createdAt, updatedAt time.Time
-		err = rows.Scan(&id, &name, &merchantCategory, &imageUrl, &lat, &long, &createdAt, &updatedAt)
+		var orderId string
+		var orderCreatedAt time.Time
+		err = rows.Scan(&orderId, &orderCreatedAt)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 		}
 
+		// Query the merchant for this order
+		query := fmt.Sprintf(`SELECT "estimateOrder".id, "estimateOrder"."merchantId", merchant.name, merchant."merchantCategory", merchant."imageUrl", merchant.lat, merchant.lon, merchant."createdAt" 
+                          FROM "estimateOrder"
+                          JOIN merchant ON "estimateOrder"."merchantId" = merchant.id 
+                          WHERE "estimateOrder"."estimateId" = '%s'`, orderId)
+		// Add the WHERE clauses for the optional parameters
+		if merchantId != "" {
+			query += ` AND merchant.id = '` + merchantId + `'`
+		}
+		if name != "" {
+			query += ` AND (LOWER(merchant.name) LIKE LOWER('%` + name + `%') 
+                    OR EXISTS (SELECT 1 FROM "estimateOrderItem"
+                               JOIN item ON "estimateOrderItem"."itemId" = item.id
+                               WHERE "estimateOrderItem"."estimateOrderId" = "estimateOrder".id
+                               AND LOWER(item.name) LIKE LOWER('%` + name + `%'))) `
+		}
+		if merchantCategory != "" && helpers.ValidateMerchantCategory(merchantCategory) {
+			query += ` AND merchant."merchantCategory" = '` + merchantCategory + `'`
+		}
+		fmt.Println(query)
+		merchantRows, err := conn.Query(query)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+		}
+
+		defer merchantRows.Close()
+
+		merchants := make([]map[string]interface{}, 0)
+		for merchantRows.Next() {
+			var estimateOrderId, merchantId, merchantName, merchantCategory, merchantImageUrl string
+			var merchantLat, merchantLong float64
+			var merchantCreatedAt time.Time
+			err = merchantRows.Scan(&estimateOrderId, &merchantId, &merchantName, &merchantCategory, &merchantImageUrl, &merchantLat, &merchantLong, &merchantCreatedAt)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+			}
+
+			// Query the items for this merchant
+			query := fmt.Sprintf(`SELECT item.id, item.name, item."productCategory", item.price, item."imageUrl", item."createdAt", "estimateOrderItem".quantity 
+                              FROM "estimateOrderItem"
+                              JOIN item ON "estimateOrderItem"."itemId" = item.id 
+                              WHERE "estimateOrderItem"."estimateOrderId" = '%s'`, estimateOrderId)
+			// Add the WHERE clauses for the optional parameters
+			if name != "" {
+				query += ` AND LOWER(item.name) LIKE LOWER('%` + name + `%')`
+			}
+			fmt.Println(query)
+			itemRows, err := conn.Query(query)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+			}
+
+			defer itemRows.Close()
+
+			items := make([]map[string]interface{}, 0)
+			for itemRows.Next() {
+				var itemId, itemName, itemCategory, itemImageUrl string
+				var itemPrice, itemQuantity int64
+				var itemCreatedAt time.Time
+				err = itemRows.Scan(&itemId, &itemName, &itemCategory, &itemPrice, &itemImageUrl, &itemCreatedAt, &itemQuantity)
+				if err != nil {
+					return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+				}
+
+				items = append(items, fiber.Map{
+					"itemId":          itemId,
+					"name":            itemName,
+					"productCategory": itemCategory,
+					"price":           itemPrice,
+					"imageUrl":        itemImageUrl,
+					"createdAt":       itemCreatedAt.Format(time.RFC3339Nano),
+				})
+			}
+
+			merchants = append(merchants, fiber.Map{
+				"merchantId":       merchantId,
+				"name":             merchantName,
+				"merchantCategory": merchantCategory,
+				"imageUrl":         merchantImageUrl,
+				"location": fiber.Map{
+					"lat":  merchantLat,
+					"long": merchantLong,
+				},
+				"items":     items,
+				"createdAt": merchantCreatedAt.Format(time.RFC3339Nano),
+			})
+		}
 		data = append(data, fiber.Map{
-			"merchantId":       id,
-			"name":             name,
-			"merchantCategory": merchantCategory,
-			"imageUrl":         imageUrl,
-			"location": fiber.Map{
-				"lat":  lat,
-				"long": long,
-			},
-			"createdAt": createdAt.Format(time.RFC3339Nano),
+			"orderId":   orderId,
+			"merchants": merchants,
 		})
 	}
 
-	// Return the results as JSON
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"data": data,
-		"meta": fiber.Map{
-			"limit":  limit,
-			"offset": offset,
-			"total":  len(data),
-		},
-	})
+	return c.Status(fiber.StatusAccepted).JSON(data)
+
+	// 	conn := db.CreateConn()
+	// 	merchantId := c.Query("merchantId", "")
+	// 	name := c.Query("name", "")
+	// 	merchantCategory := c.Query("merchantCategory", "")
+
+	// 	query := (`SELECT e.id AS "orderId", e."createdAt" AS "orderCreatedAt",
+	//   ARRAY_AGG(
+	//     JSON_BUILD_OBJECT(
+	//       'merchantId', m.id,
+	//       'name', m.name,
+	//       'merchantCategory', m."merchantCategory",
+	//       'imageUrl', m."imageUrl",
+	//       'location', JSON_BUILD_OBJECT('lat', m.lat, 'long', m.lon),
+	//       'createdAt', m."createdAt",
+	//       'items', i.items
+	//     )
+	//   ) AS merchants
+	// FROM estimate e
+	// JOIN "estimateOrder" eo ON e.id = eo."estimateId"
+	// JOIN merchant m ON eo."merchantId" = m.id
+	// LEFT JOIN LATERAL (
+	//   SELECT JSON_AGG(
+	//     JSON_BUILD_OBJECT(
+	//       'itemId', i.id,
+	//       'name', i.name,
+	//       'productCategory', i."productCategory",
+	//       'price', i.price,
+	//       'imageUrl', i."imageUrl",
+	//       'createdAt', i."createdAt",
+	//       'quantity', eoi.quantity
+	//     )
+	//   ) AS items
+	//   FROM "estimateOrderItem" eoi
+	//   JOIN item i ON eoi."itemId" = i.id
+	//   WHERE eoi."estimateOrderId" = eo.id`)
+	// 	if merchantId != "" {
+	// 		query += ` AND m.id = '` + merchantId + `'`
+	// 	}
+	// 	if name != "" {
+	// 		query += ` AND (LOWER(m.name) LIKE LOWER('` + name + `') OR LOWER(i.name) LIKE LOWER('` + name + `'))`
+	// 	}
+	// 	if merchantCategory != "" {
+	// 		query += ` AND m."merchantCategory" = '` + merchantCategory + `'`
+	// 	}
+	// 	query += `) i ON TRUE WHERE e."userId" = '` + fmt.Sprintf("%v", c.Locals("userId")) + `' GROUP BY e.id ORDER BY e."createdAt" DESC`
+
+	// 	fmt.Println(query)
+	// 	rows, err := conn.Query(query)
+	// 	if err != nil {
+	// 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	// 	}
+	// 	defer rows.Close()
+
+	// 	// Prepare the data
+	// 	data := make([]map[string]interface{}, 0)
+	// 	for rows.Next() {
+	// 		var orderId string
+	// 		var orderCreatedAt time.Time
+	// 		var merchants string
+	// 		err = rows.Scan(&orderId, &orderCreatedAt, &merchants)
+	// 		if err != nil {
+	// 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	// 		}
+
+	// 		fmt.Println("Merchants:", merchants)
+
+	// 		// Remove the first `{"` and the last `"}` from the JSON string
+	// 		if len(merchants) > 2 {
+	// 			merchants = merchants[2 : len(merchants)-2]
+	// 		}
+
+	// 		// Replace escaped quotes with actual quotes
+	// 		merchants = strings.ReplaceAll(merchants, `\"`, `"`)
+
+	// 		fmt.Println("Cleaned Merchants JSON:", merchants)
+
+	// 		// Parse the JSON data
+	// 		var jsonData interface{}
+	// 		if err := json.Unmarshal([]byte(merchants), &jsonData); err != nil {
+	// 			// fmt.Println("Error:", err)
+	// 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	// 		}
+
+	// 		// Pretty print the JSON
+	// 		prettyJSON, err := json.MarshalIndent(jsonData, "", "    ")
+	// 		if err != nil {
+	// 			// fmt.Println("Error:", err)
+	// 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	// 		}
+
+	// 		fmt.Println(string(prettyJSON))
+	// 	}
+
+	// 	return c.Status(fiber.StatusOK).JSON(data)
+
 }
