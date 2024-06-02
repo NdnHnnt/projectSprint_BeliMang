@@ -503,11 +503,10 @@ func MerchantEstimate(c *fiber.Ctx) error {
 		for i := 0; i < n; i++ {
             if !isVisited[i] {
                 // Check if the merchant is within the acceptable distance
-                merchantLocation := helpers.LatLongToCartesian(listMerchants[i].Lat, listMerchants[i].Lon)
-                userLocation := helpers.LatLongToCartesian(MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long)
-                area := helpers.CalculateRectangleArea(userLocation, merchantLocation)
-                if area > 3 {
-                    return c.Status(400).JSON(fiber.Map{"message": "Merchant is too far >3km2"})
+                x1, y1, _ := helpers.LatLongToCartesian(listMerchants[i].Lat, listMerchants[i].Lon)
+                x2, y2, _ := helpers.LatLongToCartesian(MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long)
+                if !helpers.CalculateRectangleArea(x1, y1, x2, y2) {
+                    return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Merchant is too far >3km2"})
                 }
 
                 // Calculate the distance for the TSP
