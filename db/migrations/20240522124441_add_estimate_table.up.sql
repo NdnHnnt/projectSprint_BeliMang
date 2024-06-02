@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS "estimate" (
     "userId" uuid NOT NULL,
     "userLat" REAL NOT NULL,
     "userLon" REAL NOT NULL,
-    "email" varchar(255) NOT NULL UNIQUE,
-    "password" varchar(30) NOT NULL,
+    -- "email" varchar(255) NOT NULL UNIQUE,
+    -- "password" varchar(30) NOT NULL,
     "totalPrice" int NOT NULL,
     -- time in unix, then convert to minutes in code
     "estimateDeliveryTime" int NOT NULL,

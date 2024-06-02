@@ -3,16 +3,12 @@ package helpers
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 	models "github.com/NdnHnnt/projectSprint_BeliMang/model"
 
-	// "HaloSuster/db"
-
 	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -38,7 +34,6 @@ func SignUserJWT(user models.UserModel) string {
 		jwt.SigningMethodHS256,
 		claims,
 	)
-	fmt.Println("Email:", user.Email)
 	jwtSecret := os.Getenv("JWT_SECRET")
 	signedToken, err := token.SignedString([]byte(jwtSecret))
 	if err != nil {
@@ -83,30 +78,29 @@ func getBearerToken(header string) (string, error) {
 func AuthAdminMiddleware(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
-		return c.Status(http.StatusUnauthorized).SendString("Missing Authorization header")
+		return c.Status(fiber.StatusUnauthorized).SendString("Missing Authorization header")
 	}
 
 	// Extract the JWT token from the Authorization header
 	tokenStr, err := getBearerToken(authHeader)
 
 	if err != nil {
-		return c.Status(http.StatusUnauthorized).SendString("Invalid Authorization header format")
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid Authorization header format")
 	}
 
 	// Parse and validate the JWT token, and extract the Nip
 	id, email, err := ParseToken(tokenStr)
 	if err != nil {
-		fmt.Println("Error parsing token: ", err)
-		return c.Status(http.StatusUnauthorized).SendString("Invalid JWT token")
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid JWT token")
 	}
 
 	// Check if email and id is in admin table
 	exists, err := ValidateAdmin(email, id)
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).SendString("Internal Server Error")
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal Server Error")
 	}
 	if !exists {
-		return c.Status(http.StatusUnauthorized).SendString("Unauthorized")
+		return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
 	}
 
 	// Store the Nip in the request context
@@ -120,30 +114,28 @@ func AuthAdminMiddleware(c *fiber.Ctx) error {
 func AuthUserMiddleware(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
-		return c.Status(http.StatusUnauthorized).SendString("Missing Authorization header")
+		return c.Status(fiber.StatusUnauthorized).SendString("Missing Authorization header")
 	}
 
 	// Extract the JWT token from the Authorization header
 	tokenStr, err := getBearerToken(authHeader)
-	fmt.Println("Token:", tokenStr)
 	if err != nil {
-		return c.Status(http.StatusUnauthorized).SendString("Invalid Authorization header format")
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid Authorization header format")
 	}
 
 	// Parse and validate the JWT token, and extract the Nip
 	id, email, err := ParseToken(tokenStr)
-	fmt.Println("Email:", email)
 	if err != nil {
-		return c.Status(http.StatusUnauthorized).SendString("Invalid JWT token")
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid JWT token")
 	}
 
 	// Check if email and id is in admin table
 	exists, err := ValidateUser(email, id)
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).SendString(err.Error())
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 	if !exists {
-		return c.Status(http.StatusUnauthorized).SendString("Unauthorized")
+		return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
 	}
 
 	// Store the Nip in the request context
