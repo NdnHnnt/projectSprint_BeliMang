@@ -501,16 +501,37 @@ func MerchantEstimate(c *fiber.Ctx) error {
 		minDist := math.Inf(1)
 
 		for i := 0; i < n; i++ {
-			if !isVisited[i] {
-				// fmt.Println(listMerchants[i])
-				dist := helpers.Haversine(currentMerchant.Lat, currentMerchant.Lon, listMerchants[i].Lat, listMerchants[i].Lon)
-				if dist <= minDist {
-					minDist = dist
-					next = i
-					// fmt.Println("minDist: ", minDist, i)
-				}
-			}
-		}
+            if !isVisited[i] {
+                // Check if the merchant is within the acceptable distance
+                merchantLocation := helpers.LatLongToCartesian(listMerchants[i].Lat, listMerchants[i].Lon)
+                userLocation := helpers.LatLongToCartesian(MerchantEstimatePrice.UserLocation.Lat, MerchantEstimatePrice.UserLocation.Long)
+                area := helpers.CalculateRectangleArea(userLocation, merchantLocation)
+                if area > 3 {
+                    return c.Status(400).JSON(fiber.Map{"message": "Merchant is too far >3km2"})
+                }
+
+                // Calculate the distance for the TSP
+                dist := helpers.Haversine(currentMerchant.Lat, currentMerchant.Lon, listMerchants[i].Lat, listMerchants[i].Lon)
+                if dist <= minDist {
+                    minDist = dist
+                    next = i
+                }
+            }
+        }
+
+		// BEFORE CARTESIAN!!!
+		// for i := 0; i < n; i++ {
+		// 	if !isVisited[i] {
+		// 		// fmt.Println(listMerchants[i])
+		// 		dist := helpers.Haversine(currentMerchant.Lat, currentMerchant.Lon, listMerchants[i].Lat, listMerchants[i].Lon)
+		// 		if dist <= minDist {
+		// 			minDist = dist
+		// 			next = i
+		// 			// fmt.Println("minDist: ", minDist, i)
+		// 		}
+		// 	}
+		// }
+		// BEFORE CARTESIAN!!!
 		if next == -1 {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": next})
 		}
